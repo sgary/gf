@@ -429,7 +429,7 @@ cloud.google.com/go/recaptchaenterprise/v2 v2.1.0/go.mod h1:w9yVqajwroDNTfGuhmOj
 cloud.google.com/go/recaptchaenterprise/v2 v2.2.0/go.mod h1:/Zu5jisWGeERrd5HnlS3EUGb/D335f9k51B/FVil0jk=
 cloud.google.com/go/recaptchaenterprise/v2 v2.3.0/go.mod h1:O9LwGCjrhGHBQET5CA7dd5NwwNQUErSgEDit1DLNTdo=
 cloud.google.com/go/recaptchaenterprise/v2 v2.4.0/go.mod h1:Am3LHfOuBstrLrNCBrlI5sbwx9LBg3te2N6hGvHn2mE=
-cloud.google.com/go/recaptchaenterprise/v2 v2.5.0/go.mod h1:O8LzcHXN3rz0j+LBC91jrwI3R+1ZSZEWrfL7XHgNo9U=
+cloud.google.com/go/recaptchaenterprise/v2 v2.5.1/go.mod h1:O8LzcHXN3rz0j+LBC91jrwI3R+1ZSZEWrfL7XHgNo9U=
 cloud.google.com/go/recaptchaenterprise/v2 v2.6.0/go.mod h1:RPauz9jeLtB3JVzg6nCbe12qNoaa8pXc4d/YukAmcnA=
 cloud.google.com/go/recaptchaenterprise/v2 v2.7.0/go.mod h1:19wVj/fs5RtYtynAPJdDTb69oW0vNHYDBTbB4NvMD9c=
 cloud.google.com/go/recommendationengine v0.5.0/go.mod h1:E5756pJcVFeVgaQv3WNpImkFP8a+RptV6dDLGPILjvg=
@@ -566,7 +566,7 @@ cloud.google.com/go/vision v1.2.0/go.mod h1:SmNwgObm5DpFBme2xpyOyasvBc1aPdjvMk2b
 cloud.google.com/go/vision/v2 v2.2.0/go.mod h1:uCdV4PpN1S0jyCyq8sIM42v2Y6zOLkZs+4R9LrGYwFo=
 cloud.google.com/go/vision/v2 v2.3.0/go.mod h1:UO61abBx9QRMFkNBbf1D8B1LXdS2cGiiCRx0vSpZoUo=
 cloud.google.com/go/vision/v2 v2.4.0/go.mod h1:VtI579ll9RpVTrdKdkMzckdnwMyX2JILb+MhPqRbPsY=
-cloud.google.com/go/vision/v2 v2.5.0/go.mod h1:MmaezXOOE+IWa+cS7OhRRLK2cNv1ZL98zhqFFZaaH2E=
+cloud.google.com/go/vision/v2 v2.5.1/go.mod h1:MmaezXOOE+IWa+cS7OhRRLK2cNv1ZL98zhqFFZaaH2E=
 cloud.google.com/go/vision/v2 v2.6.0/go.mod h1:158Hes0MvOS9Z/bDMSFpjwsUrZ5fPrdwuyyvKSGAGMY=
 cloud.google.com/go/vision/v2 v2.7.0/go.mod h1:H89VysHy21avemp6xcf9b9JvZHVehWbET0uT/bcuY/0=
 cloud.google.com/go/vmmigration v1.2.0/go.mod h1:IRf0o7myyWFSmVR1ItrBSFLFD/rJkfDCUTO4vLlJvsE=
