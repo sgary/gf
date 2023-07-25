@@ -10,6 +10,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/smallnest/rpcx/share"
+	"go.opentelemetry.io/otel"
 	"io"
 	"os"
 	"runtime"
@@ -19,6 +21,7 @@ import (
 	"github.com/fatih/color"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/gogf/gf/contrib/rpc/rpcx/v2"
 	"github.com/gogf/gf/v2/debug/gdebug"
 	"github.com/gogf/gf/v2/internal/consts"
 	"github.com/gogf/gf/v2/internal/intlog"
@@ -183,8 +186,15 @@ func (l *Logger) print(ctx context.Context, level int, stack string, values ...i
 
 	// Convert value to string.
 	if ctx != nil {
-		// Tracing values.
-		spanCtx := trace.SpanContextFromContext(ctx)
+		var spanCtx trace.SpanContext
+		//兼容RPCX Context格式
+		if _, ok := ctx.(*share.Context); ok {
+			spanCtx = rpcx.Extract(ctx, otel.GetTextMapPropagator())
+		} else {
+			// Tracing values.
+			spanCtx = trace.SpanContextFromContext(ctx)
+		}
+
 		if traceId := spanCtx.TraceID(); traceId.IsValid() {
 			input.TraceId = traceId.String()
 		}
