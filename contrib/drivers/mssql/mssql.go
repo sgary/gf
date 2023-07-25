@@ -313,8 +313,3 @@ func (d *Driver) DoInsert(ctx context.Context, link gdb.Link, table string, list
 		return d.Core.DoInsert(ctx, link, table, list, option)
 	}
 }
-
-//ExpandFields 获取扩展列信息
-func (d *DriverMssql) ExpandFields(ctx context.Context, bizCode, bizType string, params ...string) (columns []*ExpandField, err error) {
-	return nil, nil
-}
