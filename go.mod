@@ -7,7 +7,6 @@ require (
 	github.com/clbanning/mxj/v2 v2.5.5
 	github.com/fatih/color v1.14.1
 	github.com/fsnotify/fsnotify v1.6.0
-	github.com/gogf/gf/contrib/rpc/rpcx/v2 v2.5.0
 	github.com/gorilla/websocket v1.5.0
 	github.com/grokify/html-strip-tags-go v0.0.1
 	github.com/magiconair/properties v1.8.6
@@ -21,4 +20,3 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-replace github.com/gogf/gf/contrib/rpc/rpcx/v2 => ./contrib/rpc/rpcx
