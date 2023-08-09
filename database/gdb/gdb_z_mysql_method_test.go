@@ -37,7 +37,7 @@ func Test_DB_Query(t *testing.T) {
 	gtest.C(t, func(t *gtest.T) {
 		_, err := db.Query("SELECT ?", 1)
 		t.AssertNil(err)
-
+		db.Model().LeftJoin()
 		_, err = db.Query("SELECT ?+?", 1, 2)
 		t.AssertNil(err)
 

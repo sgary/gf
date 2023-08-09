@@ -117,15 +117,18 @@ func (m *Model) UpdateExtend(dataAndWhere ...interface{}) (result sql.Result, er
 			rows.Scan(&id)
 			for key, value := range exMap {
 				dataMap := map[string]interface{}{
+					"row_key":      id,
+					"filed_code":   key,
 					"filed_value":  value,
 					"updated_by":   tdata["updated_by"],
 					"updated_name": tdata["updated_name"],
 					"updated_time": gtime.Now().String(),
 				}
-				var whereArgs = []interface{}{id, key}
+				//var whereArgs = []interface{}{id, key}
 
-				updateSql := fmt.Sprintf(" WHERE row_key = ? and filed_code=?")
-				m.db.DoUpdate(m.GetCtx(), m.getLink(true), m.expandsTable, dataMap, updateSql, m.mergeArguments(whereArgs)...)
+				//updateSql := fmt.Sprintf(" WHERE row_key = ? and filed_code=?")
+				m.db.Save(m.expandsTable, dataMap)
+				//m.db.DoUpdate(m.GetCtx(), m.getLink(true), m.expandsTable, dataMap, updateSql, m.mergeArguments(whereArgs)...)
 			}
 		}
 

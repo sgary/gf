@@ -103,7 +103,8 @@ func (m *Model) getFieldsFiltered() string {
 
 // getExpandFiltered @chengjian
 func (m *Model) getExpandFiltered() string {
-	return fmt.Sprintf(" ,JSON_OBJECTAGG(%s.filed_code,%s.filed_value) ext_data", m.expands, m.expands)
+	return fmt.Sprintf(" ,JSON_OBJECTAGG(CASE WHEN %s.filed_code IS NULL THEN 'default' ELSE %s.filed_code END,"+
+		"CASE WHEN %s.filed_value IS NULL THEN 'default' ELSE %s.filed_value END ) ext_data", m.expands, m.expands, m.expands, m.expands)
 }
 
 // Chunk iterates the query result with given `size` and `handler` function.
@@ -347,11 +348,12 @@ func (m *Model) Scan(pointer interface{}, where ...interface{}) error {
 // Note that the parameter `listPointer` should be type of *[]struct/*[]*struct.
 // Usage example:
 //
-// type Entity struct {
-// 	   User       *EntityUser
-// 	   UserDetail *EntityUserDetail
-//	   UserScores []*EntityUserScores
-// }
+//	type Entity struct {
+//		   User       *EntityUser
+//		   UserDetail *EntityUserDetail
+//		   UserScores []*EntityUserScores
+//	}
+//
 // var users []*Entity
 // or
 // var users []Entity

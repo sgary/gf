@@ -6,17 +6,18 @@ import (
 )
 
 func (m *Model) Expands(param ...string) *Model {
+	model := m.getModel()
 	var array []string
-	if gstr.Contains(m.tables, "AS") {
-		array = gstr.SplitAndTrim(m.tables, "AS")
-	} else if gstr.Contains(m.tables, " ") {
-		array = gstr.SplitAndTrim(m.tables, " ")
+	if gstr.Contains(model.tables, "AS") {
+		array = gstr.SplitAndTrim(model.tables, "AS")
+	} else if gstr.Contains(model.tables, " ") {
+		array = gstr.SplitAndTrim(model.tables, " ")
 	}
 	if len(array) < 2 {
 		panic(fmt.Sprintf(`The extended attribute main table %s must have an alias set`, m.tables))
 	}
 	table := array[0]
-	charLeft, charRight := m.db.GetChars()
+	charLeft, charRight := model.db.GetChars()
 	table = gstr.Trim(table, charLeft+charRight)
 	alias := array[1]
 	if len(param) == 1 {
@@ -29,22 +30,22 @@ func (m *Model) Expands(param ...string) *Model {
 			array1 = append(array1, fmt.Sprintf("%s_extend ", table))
 			array1 = append(array1, param[0])
 		}
-		m.expandsTable = array1[0]
-		m.expands = array1[1]
+		model.expandsTable = array1[0]
+		model.expands = array1[1]
 	} else if len(param) > 1 {
-		m.expandsTable = param[0]
-		m.expands = param[1]
+		model.expandsTable = param[0]
+		model.expands = param[1]
 	} else {
-		if len(m.expandsTable) == 0 {
-			m.expandsTable = fmt.Sprintf("%s_extend ", table)
+		if len(model.expandsTable) == 0 {
+			model.expandsTable = fmt.Sprintf("%s_extend ", table)
 		}
-		m.expands = "ext"
+		model.expands = "ext"
 	}
 
-	if m.fields == "*" {
-		m.fields = fmt.Sprintf("%s.%s", alias, m.fields)
+	if model.fields == "*" {
+		model.fields = fmt.Sprintf("%s.%s", alias, m.fields)
 	}
-	m.LeftJoin(m.expandsTable, m.expands, fmt.Sprintf("%s.id = %s.row_key", alias, m.expands))
-	m.Group(fmt.Sprintf("%s.id", alias))
-	return m
+	model = model.LeftJoin(model.expandsTable, model.expands, fmt.Sprintf("%s.id = %s.row_key", alias, model.expands))
+	model = model.Group(fmt.Sprintf("%s.id", alias))
+	return model
 }
