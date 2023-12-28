@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"github.com/gogf/gf/errors/gcode"
 	"reflect"
+	"strings"
 
 	"github.com/gogf/gf/errors/gerror"
 	"github.com/gogf/gf/os/gtime"
@@ -115,6 +116,7 @@ func (m *Model) UpdateExtend(dataAndWhere ...interface{}) (result sql.Result, er
 		for rows.Next() {
 			var id int64
 			rows.Scan(&id)
+			var list List
 			for key, value := range exMap {
 				dataMap := map[string]interface{}{
 					"row_key":      id,
@@ -124,11 +126,31 @@ func (m *Model) UpdateExtend(dataAndWhere ...interface{}) (result sql.Result, er
 					"updated_name": tdata["updated_name"],
 					"updated_time": gtime.Now().String(),
 				}
-				//var whereArgs = []interface{}{id, key}
-
-				//updateSql := fmt.Sprintf(" WHERE row_key = ? and filed_code=?")
-				m.db.Save(m.expandsTable, dataMap)
-				//m.db.DoUpdate(m.GetCtx(), m.getLink(true), m.expandsTable, dataMap, updateSql, m.mergeArguments(whereArgs)...)
+				var whereArgs = []interface{}{id, key}
+				updateSql := fmt.Sprintf(" WHERE row_key = ? and filed_code=?")
+				data, _ := m.db.DoUpdate(m.GetCtx(), m.getLink(true), m.expandsTable, dataMap, updateSql, m.mergeArguments(whereArgs)...)
+				affected, _ := data.RowsAffected()
+				if affected == 0 {
+					list = append(list, dataMap)
+				}
+			}
+			if len(list) > 0 {
+				columnNames := make([]string, 0, len(list[0])+3)
+				for k, _ := range list[0] {
+					columnNames = append(columnNames, k)
+				}
+				columnNames = append(columnNames, []string{"created_by", "created_name", "created_time"}...)
+				doInsertOption, _ := m.formatDoInsertOption(insertOptionDefault, columnNames)
+				for i, _ := range list {
+					list[i]["created_by"] = tdata["updated_by"]
+					list[i]["created_name"] = tdata["updated_name"]
+					list[i]["created_time"] = gtime.Now().String()
+				}
+				expandsTable := m.expandsTable
+				if strings.Contains(expandsTable, " ") {
+					expandsTable = strings.Split(expandsTable, " ")[0]
+				}
+				m.db.DoInsert(m.GetCtx(), m.getLink(true), expandsTable, list, doInsertOption)
 			}
 		}
 
