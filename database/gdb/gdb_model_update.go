@@ -105,6 +105,8 @@ func (m *Model) UpdateExtend(dataAndWhere ...interface{}) (result sql.Result, er
 		}
 		json.Unmarshal(extData, &exMap)
 	}
+	m.tables = strings.Split(m.tables, " ")[0]
+	m.expandsTable = strings.Split(m.expandsTable, " ")[0]
 
 	if len(exMap) > 0 {
 		tdata := m.data.(map[string]interface{})
