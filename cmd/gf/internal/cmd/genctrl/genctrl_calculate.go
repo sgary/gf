@@ -14,10 +14,7 @@ import (
 )
 
 func (c CGenCtrl) getApiItemsInSrc(apiModuleFolderPath string) (items []apiItem, err error) {
-	var (
-		fileContent string
-		importPath  string
-	)
+	var importPath string
 	// The second level folders: versions.
 	apiVersionFolderPaths, err := gfile.ScanDir(apiModuleFolderPath, "*", false)
 	if err != nil {
@@ -37,17 +34,19 @@ func (c CGenCtrl) getApiItemsInSrc(apiModuleFolderPath string) (items []apiItem,
 			if gfile.IsDir(apiFileFolderPath) {
 				continue
 			}
-			fileContent = gfile.GetContents(apiFileFolderPath)
-			matches, err := gregex.MatchAllString(PatternApiDefinition, fileContent)
+			structsInfo, err := c.getStructsNameInSrc(apiFileFolderPath)
 			if err != nil {
 				return nil, err
 			}
-			for _, match := range matches {
+			for _, methodName := range structsInfo {
+				// remove end "Req"
+				methodName = gstr.TrimRightStr(methodName, "Req", 1)
 				item := apiItem{
 					Import:     gstr.Trim(importPath, `"`),
+					FileName:   gfile.Name(apiFileFolderPath),
 					Module:     gfile.Basename(apiModuleFolderPath),
 					Version:    gfile.Basename(apiVersionFolderPath),
-					MethodName: match[1],
+					MethodName: methodName,
 				}
 				items = append(items, item)
 			}
@@ -64,26 +63,22 @@ func (c CGenCtrl) getApiItemsInDst(dstFolder string) (items []apiItem, err error
 		Path  string
 		Alias string
 	}
-	var fileContent string
 	filePaths, err := gfile.ScanDir(dstFolder, "*.go", true)
 	if err != nil {
 		return nil, err
 	}
 	for _, filePath := range filePaths {
-		fileContent = gfile.GetContents(filePath)
-		match, err := gregex.MatchString(`import\s+\(([\s\S]+?)\)`, fileContent)
-		if err != nil {
-			return nil, err
-		}
-		if len(match) < 2 {
-			continue
-		}
 		var (
 			array       []string
 			importItems []importItem
-			importLines = gstr.SplitAndTrim(match[1], "\n")
+			importLines []string
 			module      = gfile.Basename(gfile.Dir(filePath))
 		)
+		importLines, err = c.getImportsInDst(filePath)
+		if err != nil {
+			return nil, err
+		}
+
 		// retrieve all imports.
 		for _, importLine := range importLines {
 			array = gstr.SplitAndTrim(importLine, " ")
@@ -99,11 +94,15 @@ func (c CGenCtrl) getApiItemsInDst(dstFolder string) (items []apiItem, err error
 			}
 		}
 		// retrieve all api usages.
+		// retrieve it without using AST, but use regular expressions to retrieve.
+		// It's because the api definition is simple and regular.
+		// Use regular expressions to get better performance.
+		fileContent := gfile.GetContents(filePath)
 		matches, err := gregex.MatchAllString(PatternCtrlDefinition, fileContent)
 		if err != nil {
 			return nil, err
 		}
-		for _, match = range matches {
+		for _, match := range matches {
 			// try to find the import path of the api.
 			var (
 				importPath string

@@ -20,6 +20,7 @@ import (
 	"github.com/olekukonko/tablewriter"
 
 	"github.com/gogf/gf/v2/container/garray"
+	"github.com/gogf/gf/v2/container/gset"
 	"github.com/gogf/gf/v2/container/gtype"
 	"github.com/gogf/gf/v2/debug/gdebug"
 	"github.com/gogf/gf/v2/errors/gcode"
@@ -300,6 +301,11 @@ func (s *Server) doRouterMapDump() {
 				handlerName = gstr.TrimRightStr(item.Handler.Name, "-fm")
 				middlewares = gstr.SplitAndTrim(item.Middleware, ",")
 			)
+
+			// No printing special internal middleware that may lead confused.
+			if gstr.SubStrFromREx(handlerName, ".") == noPrintInternalRoute {
+				continue
+			}
 			for k, v := range middlewares {
 				middlewares[k] = gstr.TrimRightStr(v, "-fm")
 			}
@@ -340,8 +346,9 @@ func (s *Server) GetOpenApi() *goai.OpenApiV3 {
 // GetRoutes retrieves and returns the router array.
 func (s *Server) GetRoutes() []RouterItem {
 	var (
-		m       = make(map[string]*garray.SortedArray)
-		address = s.GetListenedAddress()
+		m              = make(map[string]*garray.SortedArray)
+		routeFilterSet = gset.NewStrSet()
+		address        = s.GetListenedAddress()
 	)
 	if s.config.HTTPSAddr != "" {
 		if len(address) > 0 {
@@ -351,24 +358,35 @@ func (s *Server) GetRoutes() []RouterItem {
 	}
 	for k, handlerItems := range s.routesMap {
 		array, _ := gregex.MatchString(`(.*?)%([A-Z]+):(.+)@(.+)`, k)
-		for index, handlerItem := range handlerItems {
-			item := RouterItem{
-				Server:     s.config.Name,
-				Address:    address,
-				Domain:     array[4],
-				Type:       handlerItem.Type,
-				Middleware: array[1],
-				Method:     array[2],
-				Route:      array[3],
-				Priority:   len(handlerItems) - index - 1,
-				Handler:    handlerItem,
-			}
+		for index := len(handlerItems) - 1; index >= 0; index-- {
+			var (
+				handlerItem = handlerItems[index]
+				item        = RouterItem{
+					Server:     s.config.Name,
+					Address:    address,
+					Domain:     array[4],
+					Type:       handlerItem.Type,
+					Middleware: array[1],
+					Method:     array[2],
+					Route:      array[3],
+					Priority:   index,
+					Handler:    handlerItem,
+				}
+			)
 			switch item.Handler.Type {
 			case HandlerTypeObject, HandlerTypeHandler:
 				item.IsServiceHandler = true
 
 			case HandlerTypeMiddleware:
 				item.Middleware = "GLOBAL MIDDLEWARE"
+			}
+			// Repeated route filtering for dump.
+			var setKey = fmt.Sprintf(
+				`%s|%s|%s|%s`,
+				item.Method, item.Route, item.Domain, item.Type,
+			)
+			if !routeFilterSet.AddIfNotExist(setKey) {
+				continue
 			}
 			if len(item.Handler.Middleware) > 0 {
 				for _, v := range item.Handler.Middleware {
@@ -451,6 +469,7 @@ func Wait() {
 	go handleProcessSignal()
 
 	<-allShutdownChan
+
 	// Remove plugins.
 	serverMapping.Iterator(func(k string, v interface{}) bool {
 		s := v.(*Server)
@@ -550,41 +569,43 @@ func (s *Server) startServer(fdMap listenerFdMap) {
 	}
 	// Start listening asynchronously.
 	serverRunning.Add(1)
-	var wg = sync.WaitGroup{}
-	for _, v := range s.servers {
+	var wg = &sync.WaitGroup{}
+	for _, gs := range s.servers {
 		wg.Add(1)
-		go func(server *gracefulServer) {
-			s.serverCount.Add(1)
-			var err error
-			// Create listener.
-			if server.isHttps {
-				err = server.CreateListenerTLS(
-					s.config.HTTPSCertPath, s.config.HTTPSKeyPath, s.config.TLSConfig,
-				)
-			} else {
-				err = server.CreateListener()
-			}
-			if err != nil {
-				s.Logger().Fatalf(ctx, `%+v`, err)
-			}
-			wg.Done()
-			// Start listening and serving in blocking way.
-			err = server.Serve(ctx)
-			// The process exits if the server is closed with none closing error.
-			if err != nil && !strings.EqualFold(http.ErrServerClosed.Error(), err.Error()) {
-				s.Logger().Fatalf(ctx, `%+v`, err)
-			}
-			// If all the underlying servers' shutdown, the process exits.
-			if s.serverCount.Add(-1) < 1 {
-				s.closeChan <- struct{}{}
-				if serverRunning.Add(-1) < 1 {
-					serverMapping.Remove(s.instance)
-					allShutdownChan <- struct{}{}
-				}
-			}
-		}(v)
+		go s.startGracefulServer(ctx, wg, gs)
 	}
 	wg.Wait()
+}
+
+func (s *Server) startGracefulServer(ctx context.Context, wg *sync.WaitGroup, server *gracefulServer) {
+	s.serverCount.Add(1)
+	var err error
+	// Create listener.
+	if server.isHttps {
+		err = server.CreateListenerTLS(
+			s.config.HTTPSCertPath, s.config.HTTPSKeyPath, s.config.TLSConfig,
+		)
+	} else {
+		err = server.CreateListener()
+	}
+	if err != nil {
+		s.Logger().Fatalf(ctx, `%+v`, err)
+	}
+	wg.Done()
+	// Start listening and serving in blocking way.
+	err = server.Serve(ctx)
+	// The process exits if the server is closed with none closing error.
+	if err != nil && !strings.EqualFold(http.ErrServerClosed.Error(), err.Error()) {
+		s.Logger().Fatalf(ctx, `%+v`, err)
+	}
+	// If all the underlying servers' shutdown, the process exits.
+	if s.serverCount.Add(-1) < 1 {
+		s.closeChan <- struct{}{}
+		if serverRunning.Add(-1) < 1 {
+			serverMapping.Remove(s.instance)
+			allShutdownChan <- struct{}{}
+		}
+	}
 }
 
 // Status retrieves and returns the server status.

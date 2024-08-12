@@ -8,6 +8,7 @@ package gendao
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 
 	"github.com/gogf/gf/v2/frame/g"
@@ -21,9 +22,7 @@ import (
 
 func generateEntity(ctx context.Context, in CGenDaoInternalInput) {
 	var dirPathEntity = gfile.Join(in.Path, in.EntityPath)
-	if in.Clear {
-		doClear(ctx, dirPathEntity, false)
-	}
+	in.genItems.AppendDirPath(dirPathEntity)
 	// Model content.
 	for i, tableName := range in.TableNames {
 		fieldMap, err := in.DB.TableFields(ctx, tableName)
@@ -33,11 +32,11 @@ func generateEntity(ctx context.Context, in CGenDaoInternalInput) {
 
 		var (
 			newTableName                    = in.NewTableNames[i]
-			entityFilePath                  = gfile.Join(dirPathEntity, gstr.CaseSnake(newTableName)+".go")
+			entityFilePath                  = filepath.FromSlash(gfile.Join(dirPathEntity, gstr.CaseSnake(newTableName)+".go"))
 			structDefinition, appendImports = generateStructDefinition(ctx, generateStructDefinitionInput{
 				CGenDaoInternalInput: in,
 				TableName:            tableName,
-				StructName:           gstr.CaseCamel(newTableName),
+				StructName:           gstr.CaseCamel(strings.ToLower(newTableName)),
 				FieldMap:             fieldMap,
 				IsDo:                 false,
 			})
@@ -45,12 +44,12 @@ func generateEntity(ctx context.Context, in CGenDaoInternalInput) {
 				ctx,
 				in,
 				newTableName,
-				gstr.CaseCamel(newTableName),
+				gstr.CaseCamel(strings.ToLower(newTableName)),
 				structDefinition,
 				appendImports,
 			)
 		)
-
+		in.genItems.AppendGeneratedFilePath(entityFilePath)
 		err = gfile.PutContents(entityFilePath, strings.TrimSpace(entityContent))
 		if err != nil {
 			mlog.Fatalf("writing content to '%s' failed: %v", entityFilePath, err)
@@ -71,6 +70,7 @@ func generateEntityContent(
 			tplVarPackageImports:     getImportPartContent(ctx, structDefine, false, appendImports),
 			tplVarTableNameCamelCase: tableNameCamelCase,
 			tplVarStructDefine:       structDefine,
+			tplVarPackageName:        filepath.Base(in.EntityPath),
 		},
 	)
 	entityContent = replaceDefaultVar(in, entityContent)

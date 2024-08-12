@@ -7,20 +7,43 @@
 package gconv
 
 import (
+	"context"
 	"reflect"
 	"time"
 
+	"github.com/gogf/gf/v2/internal/intlog"
+	"github.com/gogf/gf/v2/internal/json"
 	"github.com/gogf/gf/v2/os/gtime"
 )
 
 // Convert converts the variable `fromValue` to the type `toTypeName`, the type `toTypeName` is specified by string.
+//
 // The optional parameter `extraParams` is used for additional necessary parameter for this conversion.
-// It supports common types conversion as its conversion based on type name string.
+// It supports common basic types conversion as its conversion based on type name string.
 func Convert(fromValue interface{}, toTypeName string, extraParams ...interface{}) interface{} {
 	return doConvert(doConvertInput{
 		FromValue:  fromValue,
 		ToTypeName: toTypeName,
 		ReferValue: nil,
+		Extra:      extraParams,
+	})
+}
+
+// ConvertWithRefer converts the variable `fromValue` to the type referred by value `referValue`.
+//
+// The optional parameter `extraParams` is used for additional necessary parameter for this conversion.
+// It supports common basic types conversion as its conversion based on type name string.
+func ConvertWithRefer(fromValue interface{}, referValue interface{}, extraParams ...interface{}) interface{} {
+	var referValueRf reflect.Value
+	if v, ok := referValue.(reflect.Value); ok {
+		referValueRf = v
+	} else {
+		referValueRf = reflect.ValueOf(referValue)
+	}
+	return doConvert(doConvertInput{
+		FromValue:  fromValue,
+		ToTypeName: referValueRf.Type().String(),
+		ReferValue: referValue,
 		Extra:      extraParams,
 	})
 }
@@ -193,7 +216,7 @@ func doConvert(in doConvertInput) (convertedValue interface{}) {
 		}
 		return Time(in.FromValue)
 	case "*time.Time":
-		var v interface{}
+		var v time.Time
 		if len(in.Extra) > 0 {
 			v = Time(in.FromValue, String(in.Extra[0]))
 		} else {
@@ -249,8 +272,13 @@ func doConvert(in doConvertInput) (convertedValue interface{}) {
 	case "[]map[string]interface{}":
 		return Maps(in.FromValue)
 
-	case "json.RawMessage":
-		return Bytes(in.FromValue)
+	case "RawMessage", "json.RawMessage":
+		// issue 3449
+		bytes, err := json.Marshal(in.FromValue)
+		if err != nil {
+			intlog.Errorf(context.TODO(), `%+v`, err)
+		}
+		return bytes
 
 	default:
 		if in.ReferValue != nil {
@@ -259,6 +287,17 @@ func doConvert(in doConvertInput) (convertedValue interface{}) {
 				referReflectValue = v
 			} else {
 				referReflectValue = reflect.ValueOf(in.ReferValue)
+			}
+			var fromReflectValue reflect.Value
+			if v, ok := in.FromValue.(reflect.Value); ok {
+				fromReflectValue = v
+			} else {
+				fromReflectValue = reflect.ValueOf(in.FromValue)
+			}
+
+			// custom converter.
+			if dstReflectValue, ok, _ := callCustomConverterWithRefer(fromReflectValue, referReflectValue); ok {
+				return dstReflectValue.Interface()
 			}
 
 			defer func() {

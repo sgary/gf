@@ -8,6 +8,7 @@ package genctrl
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/gogf/gf/cmd/gf/v2/internal/consts"
 	"github.com/gogf/gf/cmd/gf/v2/internal/utility/mlog"
@@ -54,7 +55,7 @@ func (c *apiSdkGenerator) Generate(apiModuleApiItems []apiItem, sdkFolderPath st
 func (c *apiSdkGenerator) doGenerateSdkPkgFile(sdkFolderPath string) (err error) {
 	var (
 		pkgName     = gfile.Basename(sdkFolderPath)
-		pkgFilePath = gfile.Join(sdkFolderPath, fmt.Sprintf(`%s.go`, pkgName))
+		pkgFilePath = filepath.FromSlash(gfile.Join(sdkFolderPath, fmt.Sprintf(`%s.go`, pkgName)))
 		fileContent string
 	)
 	if gfile.Exists(pkgFilePath) {
@@ -78,8 +79,8 @@ func (c *apiSdkGenerator) doGenerateSdkIClient(
 		pkgName                 = gfile.Basename(sdkFolderPath)
 		funcName                = gstr.CaseCamel(module) + gstr.UcFirst(version)
 		interfaceName           = fmt.Sprintf(`I%s`, funcName)
-		moduleImportPath        = fmt.Sprintf(`"%s"`, gfile.Dir(versionImportPath))
-		iClientFilePath         = gfile.Join(sdkFolderPath, fmt.Sprintf(`%s.iclient.go`, pkgName))
+		moduleImportPath        = gstr.Replace(fmt.Sprintf(`"%s"`, gfile.Dir(versionImportPath)), "\\", "/", -1)
+		iClientFilePath         = filepath.FromSlash(gfile.Join(sdkFolderPath, fmt.Sprintf(`%s.iclient.go`, pkgName)))
 		interfaceFuncDefinition = fmt.Sprintf(
 			`%s() %s.%s`,
 			gstr.CaseCamel(module)+gstr.UcFirst(version), module, interfaceName,
@@ -102,6 +103,7 @@ func (c *apiSdkGenerator) doGenerateSdkIClient(
 	// append the import path to current import paths.
 	if !gstr.Contains(fileContent, moduleImportPath) {
 		isDirty = true
+		// It is without using AST, because it is from a template.
 		fileContent, err = gregex.ReplaceString(
 			`(import \([\s\S]*?)\)`,
 			fmt.Sprintf("$1\t%s\n)", moduleImportPath),
@@ -115,8 +117,9 @@ func (c *apiSdkGenerator) doGenerateSdkIClient(
 	// append the function definition to interface definition.
 	if !gstr.Contains(fileContent, interfaceFuncDefinition) {
 		isDirty = true
+		// It is without using AST, because it is from a template.
 		fileContent, err = gregex.ReplaceString(
-			`(type iClient interface {[\s\S]*?)}`,
+			`(type IClient interface {[\s\S]*?)}`,
 			fmt.Sprintf("$1\t%s\n}", interfaceFuncDefinition),
 			fileContent,
 		)
@@ -142,12 +145,12 @@ func (c *apiSdkGenerator) doGenerateSdkImplementer(
 		pkgName             = gfile.Basename(sdkFolderPath)
 		moduleNameCamel     = gstr.CaseCamel(module)
 		moduleNameSnake     = gstr.CaseSnake(module)
-		moduleImportPath    = gfile.Dir(versionImportPath)
+		moduleImportPath    = gstr.Replace(gfile.Dir(versionImportPath), "\\", "/", -1)
 		versionPrefix       = ""
 		implementerName     = moduleNameCamel + gstr.UcFirst(version)
-		implementerFilePath = gfile.Join(sdkFolderPath, fmt.Sprintf(
+		implementerFilePath = filepath.FromSlash(gfile.Join(sdkFolderPath, fmt.Sprintf(
 			`%s_%s_%s.go`, pkgName, moduleNameSnake, version,
-		))
+		)))
 	)
 	if sdkNoV1 && version == "v1" {
 		implementerName = moduleNameCamel

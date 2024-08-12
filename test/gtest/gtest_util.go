@@ -8,7 +8,6 @@ package gtest
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/gogf/gf/v2/debug/gdebug"
 	"github.com/gogf/gf/v2/internal/empty"
+	"github.com/gogf/gf/v2/text/gstr"
 	"github.com/gogf/gf/v2/util/gconv"
 )
 
@@ -243,6 +243,12 @@ func AssertIN(value, expect interface{}) {
 				break
 			}
 		}
+	case reflect.String:
+		var (
+			valueStr  = gconv.String(value)
+			expectStr = gconv.String(expect)
+		)
+		passed = gstr.Contains(expectStr, valueStr)
 	default:
 		panic(fmt.Sprintf(`[ASSERT] INVALID EXPECT VALUE TYPE: %v`, expectKind))
 	}
@@ -275,6 +281,12 @@ func AssertNI(value, expect interface{}) {
 				break
 			}
 		}
+	case reflect.String:
+		var (
+			valueStr  = gconv.String(value)
+			expectStr = gconv.String(expect)
+		)
+		passed = !gstr.Contains(expectStr, valueStr)
 	default:
 		panic(fmt.Sprintf(`[ASSERT] INVALID EXPECT VALUE TYPE: %v`, expectKind))
 	}
@@ -363,7 +375,7 @@ func DataPath(names ...string) string {
 func DataContent(names ...string) string {
 	path := DataPath(names...)
 	if path != "" {
-		data, err := ioutil.ReadFile(path)
+		data, err := os.ReadFile(path)
 		if err == nil {
 			return string(data)
 		}

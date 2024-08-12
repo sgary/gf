@@ -24,6 +24,7 @@ import (
 
 	"github.com/gogf/gf/v2/debug/gdebug"
 	"github.com/gogf/gf/v2/internal/consts"
+	"github.com/gogf/gf/v2/internal/errors"
 	"github.com/gogf/gf/v2/internal/intlog"
 	"github.com/gogf/gf/v2/os/gctx"
 	"github.com/gogf/gf/v2/os/gfile"
@@ -95,7 +96,7 @@ func (l *Logger) getFilePath(now time.Time) string {
 }
 
 // print prints `s` to defined writer, logging file or passed `std`.
-func (l *Logger) print(ctx context.Context, level int, stack string, values ...interface{}) {
+func (l *Logger) print(ctx context.Context, level int, stack string, values ...any) {
 	// Lazy initialize for rotation feature.
 	// It uses atomic reading operation to enhance the performance checking.
 	// It here uses CAP for performance and concurrent safety.
@@ -119,6 +120,7 @@ func (l *Logger) print(ctx context.Context, level int, stack string, values ...i
 			Color:  defaultLevelColor[level],
 			Level:  level,
 			Stack:  stack,
+			Values: values,
 		}
 	)
 
@@ -128,7 +130,7 @@ func (l *Logger) print(ctx context.Context, level int, stack string, values ...i
 	} else if defaultHandler != nil {
 		input.handlers = []Handler{defaultHandler}
 	}
-	input.handlers = append(input.handlers, defaultPrintHandler)
+	input.handlers = append(input.handlers, doFinalPrint)
 
 	// Time.
 	timeFormat := ""
@@ -214,24 +216,6 @@ func (l *Logger) print(ctx context.Context, level int, stack string, values ...i
 			}
 		}
 	}
-	var tempStr string
-	for _, v := range values {
-		tempStr = gconv.String(v)
-		if len(input.Content) > 0 {
-			if input.Content[len(input.Content)-1] == '\n' {
-				// Remove one blank line(\n\n).
-				if len(tempStr) > 0 && tempStr[0] == '\n' {
-					input.Content += tempStr[1:]
-				} else {
-					input.Content += tempStr
-				}
-			} else {
-				input.Content += " " + tempStr
-			}
-		} else {
-			input.Content = tempStr
-		}
-	}
 	if l.config.Flags&F_ASYNC > 0 {
 		input.IsAsync = true
 		err := asyncPool.Add(ctx, func(ctx context.Context) {
@@ -245,24 +229,25 @@ func (l *Logger) print(ctx context.Context, level int, stack string, values ...i
 	}
 }
 
-// doDefaultPrint outputs the logging content according configuration.
-func (l *Logger) doDefaultPrint(ctx context.Context, input *HandlerInput) *bytes.Buffer {
+// doFinalPrint outputs the logging content according configuration.
+func (l *Logger) doFinalPrint(ctx context.Context, input *HandlerInput) *bytes.Buffer {
 	var buffer *bytes.Buffer
-	if l.config.Writer == nil {
-		// Allow output to stdout?
-		if l.config.StdoutPrint {
-			if buf := l.printToStdout(ctx, input); buf != nil {
-				buffer = buf
-			}
+	// Allow output to stdout?
+	if l.config.StdoutPrint {
+		if buf := l.printToStdout(ctx, input); buf != nil {
+			buffer = buf
 		}
+	}
 
-		// Output content to disk file.
-		if l.config.Path != "" {
-			if buf := l.printToFile(ctx, input.Time, input); buf != nil {
-				buffer = buf
-			}
+	// Output content to disk file.
+	if l.config.Path != "" {
+		if buf := l.printToFile(ctx, input.Time, input); buf != nil {
+			buffer = buf
 		}
-	} else {
+	}
+
+	// Used custom writer.
+	if l.config.Writer != nil {
 		// Output to custom writer.
 		if buf := l.printToWriter(ctx, input); buf != nil {
 			buffer = buf
@@ -274,9 +259,7 @@ func (l *Logger) doDefaultPrint(ctx context.Context, input *HandlerInput) *bytes
 // printToWriter writes buffer to writer.
 func (l *Logger) printToWriter(ctx context.Context, input *HandlerInput) *bytes.Buffer {
 	if l.config.Writer != nil {
-		var (
-			buffer = input.getRealBuffer(l.config.WriterColorEnable)
-		)
+		var buffer = input.getRealBuffer(l.config.WriterColorEnable)
 		if _, err := l.config.Writer.Write(buffer.Bytes()); err != nil {
 			intlog.Errorf(ctx, `%+v`, err)
 		}
@@ -292,7 +275,7 @@ func (l *Logger) printToStdout(ctx context.Context, input *HandlerInput) *bytes.
 			err    error
 			buffer = input.getRealBuffer(!l.config.StdoutColorDisabled)
 		)
-		// This will lose color in Windows os system.
+		// This will lose color in Windows os system. DO NOT USE.
 		// if _, err := os.Stdout.Write(input.getRealBuffer(true).Bytes()); err != nil {
 
 		// This will print color in Windows os system.
@@ -317,7 +300,7 @@ func (l *Logger) printToFile(ctx context.Context, t time.Time, in *HandlerInput)
 	// Rotation file size checks.
 	if l.config.RotateSize > 0 && gfile.Size(logFilePath) > l.config.RotateSize {
 		if runtime.GOOS == "windows" {
-			file := l.getFilePointer(ctx, logFilePath)
+			file := l.createFpInPool(ctx, logFilePath)
 			if file == nil {
 				intlog.Errorf(ctx, `got nil file pointer for: %s`, logFilePath)
 				return buffer
@@ -338,7 +321,7 @@ func (l *Logger) printToFile(ctx context.Context, t time.Time, in *HandlerInput)
 		l.rotateFileBySize(ctx, t)
 	}
 	// Logging content outputting to disk file.
-	if file := l.getFilePointer(ctx, logFilePath); file == nil {
+	if file := l.createFpInPool(ctx, logFilePath); file == nil {
 		intlog.Errorf(ctx, `got nil file pointer for: %s`, logFilePath)
 	} else {
 		if _, err := file.Write(buffer.Bytes()); err != nil {
@@ -351,8 +334,8 @@ func (l *Logger) printToFile(ctx context.Context, t time.Time, in *HandlerInput)
 	return buffer
 }
 
-// getFilePointer retrieves and returns a file pointer from file pool.
-func (l *Logger) getFilePointer(ctx context.Context, path string) *gfpool.File {
+// createFpInPool retrieves and returns a file pointer from file pool.
+func (l *Logger) createFpInPool(ctx context.Context, path string) *gfpool.File {
 	file, err := gfpool.Open(
 		path,
 		defaultFileFlags,
@@ -366,8 +349,8 @@ func (l *Logger) getFilePointer(ctx context.Context, path string) *gfpool.File {
 	return file
 }
 
-// getOpenedFilePointer retrieves and returns a file pointer from file pool.
-func (l *Logger) getOpenedFilePointer(ctx context.Context, path string) *gfpool.File {
+// getFpFromPool retrieves and returns a file pointer from file pool.
+func (l *Logger) getFpFromPool(ctx context.Context, path string) *gfpool.File {
 	file := gfpool.Get(
 		path,
 		defaultFileFlags,
@@ -381,23 +364,23 @@ func (l *Logger) getOpenedFilePointer(ctx context.Context, path string) *gfpool.
 }
 
 // printStd prints content `s` without stack.
-func (l *Logger) printStd(ctx context.Context, level int, value ...interface{}) {
-	l.print(ctx, level, "", value...)
+func (l *Logger) printStd(ctx context.Context, level int, values ...interface{}) {
+	l.print(ctx, level, "", values...)
 }
 
-// printStd prints content `s` with stack check.
-func (l *Logger) printErr(ctx context.Context, level int, value ...interface{}) {
+// printErr prints content `s` with stack check.
+func (l *Logger) printErr(ctx context.Context, level int, values ...interface{}) {
 	var stack string
 	if l.config.StStatus == 1 {
 		stack = l.GetStack()
 	}
 	// In matter of sequence, do not use stderr here, but use the same stdout.
-	l.print(ctx, level, stack, value...)
+	l.print(ctx, level, stack, values...)
 }
 
 // format formats `values` using fmt.Sprintf.
-func (l *Logger) format(format string, value ...interface{}) string {
-	return fmt.Sprintf(format, value...)
+func (l *Logger) format(format string, values ...interface{}) string {
+	return fmt.Sprintf(format, values...)
 }
 
 // PrintStack prints the caller stack,
@@ -420,6 +403,10 @@ func (l *Logger) GetStack(skip ...int) string {
 	filters := []string{pathFilterKey}
 	if l.config.StFilter != "" {
 		filters = append(filters, l.config.StFilter)
+	}
+	// Whether filter framework error stacks.
+	if errors.IsStackModeBrief() {
+		filters = append(filters, consts.StackFilterKeyForGoFrame)
 	}
 	return gdebug.StackWithFilters(filters, stackSkip)
 }

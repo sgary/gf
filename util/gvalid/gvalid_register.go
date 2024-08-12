@@ -30,6 +30,9 @@ type RuleFuncInput struct {
 	// Field specifies the field for this rule to validate.
 	Field string
 
+	// ValueType specifies the type of the value, which might be nil.
+	ValueType reflect.Type
+
 	// Value specifies the value for this rule to validate.
 	Value *gvar.Var
 
@@ -49,7 +52,7 @@ func RegisterRule(rule string, f RuleFunc) {
 	if customRuleFuncMap[rule] != nil {
 		intlog.PrintFunc(context.TODO(), func() string {
 			return fmt.Sprintf(
-				`rule "%s" is overwrotten by function "%s"`,
+				`rule "%s" is overwritten by function "%s"`,
 				rule, runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name(),
 			)
 		})

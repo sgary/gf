@@ -10,7 +10,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime/multipart"
 	"net/http"
 	"reflect"
@@ -31,9 +30,9 @@ import (
 )
 
 const (
-	parseTypeRequest = 0
-	parseTypeQuery   = 1
-	parseTypeForm    = 2
+	parseTypeRequest = iota
+	parseTypeQuery
+	parseTypeForm
 )
 
 var (
@@ -159,10 +158,12 @@ func (r *Request) GetBody() []byte {
 	return r.bodyContent
 }
 
+// MakeBodyRepeatableRead marks the request body could be repeatedly readable or not.
+// It also returns the current content of the request body.
 func (r *Request) MakeBodyRepeatableRead(repeatableRead bool) []byte {
 	if r.bodyContent == nil {
 		var err error
-		if r.bodyContent, err = ioutil.ReadAll(r.Body); err != nil {
+		if r.bodyContent, err = io.ReadAll(r.Body); err != nil {
 			errMsg := `Read from request Body failed`
 			if gerror.Is(err, io.EOF) {
 				errMsg += `, the Body might be closed or read manually from middleware/hook/other package previously`
@@ -268,10 +269,14 @@ func (r *Request) parseForm() {
 		return
 	}
 	if contentType := r.Header.Get("Content-Type"); contentType != "" {
-		r.MakeBodyRepeatableRead(true)
-
-		var err error
+		var (
+			err            error
+			repeatableRead = true
+		)
 		if gstr.Contains(contentType, "multipart/") {
+			// To avoid big memory consuming.
+			// The `multipart/` type form always contains binary data, which is not necessary read twice.
+			repeatableRead = false
 			// multipart/form-data, multipart/mixed
 			if err = r.ParseMultipartForm(r.Server.config.FormParsingMemory); err != nil {
 				panic(gerror.WrapCode(gcode.CodeInvalidRequest, err, "r.ParseMultipartForm failed"))
@@ -281,6 +286,9 @@ func (r *Request) parseForm() {
 			if err = r.Request.ParseForm(); err != nil {
 				panic(gerror.WrapCode(gcode.CodeInvalidRequest, err, "r.Request.ParseForm failed"))
 			}
+		}
+		if repeatableRead {
+			r.MakeBodyRepeatableRead(true)
 		}
 		if len(r.PostForm) > 0 {
 			// Parse the form data using united parsing way.

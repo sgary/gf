@@ -10,7 +10,6 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"io/ioutil"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -24,6 +23,7 @@ import (
 	"github.com/gogf/gf/v2/internal/json"
 	"github.com/gogf/gf/v2/internal/utils"
 	"github.com/gogf/gf/v2/os/gfile"
+	"github.com/gogf/gf/v2/os/gtime"
 	"github.com/gogf/gf/v2/text/gregex"
 	"github.com/gogf/gf/v2/text/gstr"
 	"github.com/gogf/gf/v2/util/gconv"
@@ -122,11 +122,18 @@ func (c *Client) PostForm(ctx context.Context, url string, data map[string]strin
 // else it uses "application/x-www-form-urlencoded". It also automatically detects the post
 // content for JSON format, and for that it automatically sets the Content-Type as
 // "application/json".
-func (c *Client) DoRequest(ctx context.Context, method, url string, data ...interface{}) (resp *Response, err error) {
+func (c *Client) DoRequest(
+	ctx context.Context, method, url string, data ...interface{},
+) (resp *Response, err error) {
+	var requestStartTime = gtime.Now()
 	req, err := c.prepareRequest(ctx, method, url, data...)
 	if err != nil {
 		return nil, err
 	}
+
+	// Metrics.
+	c.handleMetricsBeforeRequest(req)
+	defer c.handleMetricsAfterRequestDone(req, requestStartTime)
 
 	// Client middleware.
 	if len(c.middlewareHandler) > 0 {
@@ -144,6 +151,9 @@ func (c *Client) DoRequest(ctx context.Context, method, url string, data ...inte
 		resp, err = c.Next(req)
 	} else {
 		resp, err = c.callRequest(req)
+	}
+	if resp != nil && resp.Response != nil {
+		req.Response = resp.Response
 	}
 	return resp, err
 }
@@ -184,7 +194,7 @@ func (c *Client) prepareRequest(ctx context.Context, method, url string, data ..
 				}
 			}
 		default:
-			params = httputil.BuildParams(data[0])
+			params = httputil.BuildParams(data[0], c.noUrlEncode)
 		}
 	}
 	if method == http.MethodGet {
@@ -337,10 +347,10 @@ func (c *Client) callRequest(req *http.Request) (resp *Response, err error) {
 	// Dump feature.
 	// The request body can be reused for dumping
 	// raw HTTP request-response procedure.
-	reqBodyContent, _ := ioutil.ReadAll(req.Body)
+	reqBodyContent, _ := io.ReadAll(req.Body)
 	resp.requestBody = reqBodyContent
-	req.Body = utils.NewReadCloser(reqBodyContent, false)
 	for {
+		req.Body = utils.NewReadCloser(reqBodyContent, false)
 		if resp.Response, err = c.Do(req); err != nil {
 			err = gerror.Wrapf(err, `request failed`)
 			// The response might not be nil when err != nil.

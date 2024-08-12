@@ -25,13 +25,7 @@ type implementer struct {
 	config httpclient.Config
 }
 
-func New(config httpclient.Config) iClient {
-	if !gstr.HasPrefix(config.URL, "http") {
-		config.URL = fmt.Sprintf("http://%s", config.URL)
-	}
-	if config.Logger == nil {
-		config.Logger = g.Log()
-	}
+func New(config httpclient.Config) IClient {
 	return &implementer{
 		config: config,
 	}
@@ -49,7 +43,7 @@ package {PkgName}
 import (
 )
 
-type iClient interface {
+type IClient interface {
 }
 `
 
@@ -84,6 +78,7 @@ func (i *implementer) {ImplementerName}() {Module}.I{ImplementerName} {
 	client.Client = client.Prefix(prefix)
 	return &implementer{ImplementerName}{client}
 }
+
 `
 
 const TemplateGenCtrlSdkImplementerFunc = `
